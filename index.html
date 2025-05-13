@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Timer Presentation</title>
+  <!-- Materialize CSS for Material Design -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet" />
+  <style>
+    body.theme-light { background-color: #fafafa; color: #222; }
+    body.theme-dark { background-color: #212121; color: #fff; }
+    body.theme-blue { background-color: #e3f2fd; color: #0d47a1; }
+    .timer-display { text-align: center; margin-top: 2rem; }
+    .timer-card { padding: 1rem; }
+  </style>
+</head>
+<body class="theme-light">
+  <nav>
+    <div class="nav-wrapper">
+      <a href="#!" class="brand-logo center">Presentation Timer</a>
+      <ul id="theme-nav" class="right">
+        <li><a href="#" data-theme="light">Ljus</a></li>
+        <li><a href="#" data-theme="dark">Mörk</a></li>
+        <li><a href="#" data-theme="blue">Blå</a></li>
+      </ul>
+    </div>
+  </nav>
+  <div class="container">
+    <div class="section">
+      <h5>1. Ange presentationstitel</h5>
+      <div class="input-field">
+        <input id="presentation-title" type="text">
+        <label for="presentation-title">Titel på presentation</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h5>2. Lägg till delar</h5>
+      <div id="parts-list"></div>
+      <a class="btn waves-effect" id="add-part-btn">Lägg till del</a>
+      <a class="btn red waves-effect" id="finish-input-btn">Presentation Klar</a>
+    </div>
+
+    <div class="section" id="start-section" style="display:none;">
+      <a class="btn green waves-effect" id="start-timer-btn">Starta Timer</a>
+    </div>
+
+    <div class="section timer-display" id="timer-display" style="display:none;">
+      <div class="card timer-card">
+        <h6 id="current-part-label">Kvar på del:</h6>
+        <h4 id="current-countdown">00:00</h4>
+      </div>
+      <div class="card timer-card">
+        <h6 id="total-label">Kvar totalt:</h6>
+        <h4 id="total-countdown">00:00</h4>
+      </div>
+      <div class="card timer-card">
+        <h6 id="next-part-label">Nästa del:</h6>
+        <p id="next-info">-</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Materialize JS & dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const parts = [];
+      const partsList = document.getElementById('parts-list');
+      const addPartBtn = document.getElementById('add-part-btn');
+      const finishInputBtn = document.getElementById('finish-input-btn');
+      const startSection = document.getElementById('start-section');
+      const startTimerBtn = document.getElementById('start-timer-btn');
+      const timerDisplay = document.getElementById('timer-display');
+      const currentPartLabel = document.getElementById('current-part-label');
+      const currentCountdown = document.getElementById('current-countdown');
+      const totalCountdown = document.getElementById('total-countdown');
+      const nextPartLabel = document.getElementById('next-part-label');
+      const nextInfo = document.getElementById('next-info');
+      let totalSeconds = 0;
+      let currentIndex = 0;
+      let interval;
+
+      function renderParts() {
+        partsList.innerHTML = '';
+        parts.forEach((p, i) => {
+          const div = document.createElement('div');
+          div.className = 'row';
+          div.innerHTML = `
+            <div class="input-field col s6">
+              <input type="text" value="${p.title}" data-index="${i}" class="part-title">
+              <label class="active">Del ${i+1} titel</label>
+            </div>
+            <div class="input-field col s4">
+              <input type="number" value="${p.minutes}" data-index="${i}" class="part-minutes" min="1">
+              <label class="active">Minuter</label>
+            </div>
+            <div class="col s2">
+              <a href="#" class="btn red btn-small delete-part" data-index="${i}"><i class="material-icons">delete</i></a>
+            </div>
+          `;
+          partsList.appendChild(div);
+        });
+
+        document.querySelectorAll('.delete-part').forEach(btn => {
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            const idx = parseInt(btn.dataset.index);
+            parts.splice(idx, 1);
+            renderParts();
+          });
+        });
+      }
+
+      addPartBtn.addEventListener('click', () => {
+        parts.push({ title: '', minutes: 1 });
+        renderParts();
+      });
+
+      finishInputBtn.addEventListener('click', () => {
+        // Save latest inputs
+        document.querySelectorAll('.part-title').forEach(inp => {
+          parts[parseInt(inp.dataset.index)].title = inp.value;
+        });
+        document.querySelectorAll('.part-minutes').forEach(inp => {
+          parts[parseInt(inp.dataset.index)].minutes = parseInt(inp.value, 10);
+        });
+        if (!document.getElementById('presentation-title').value || parts.length === 0) {
+          M.toast({html: 'Fyll i titel och minst en del'});
+          return;
+        }
+        totalSeconds = parts.reduce((sum,p) => sum + p.minutes*60, 0);
+        startSection.style.display = 'block';
+      });
+
+      startTimerBtn.addEventListener('click', () => {
+        document.querySelector('nav').style.display = 'none';
+        document.querySelector('.section').style.display = 'none';
+        timerDisplay.style.display = 'block';
+        currentIndex = 0;
+        let currentSeconds = parts[0].minutes * 60;
+
+        updateLabels();
+
+        interval = setInterval(() => {
+          if (totalSeconds <= 0) {
+            clearInterval(interval);
+            currentCountdown.textContent = '00:00';
+            totalCountdown.textContent = '00:00';
+            nextInfo.textContent = '—';
+            return;
+          }
+          currentSeconds--;
+          totalSeconds--;
+          if (currentSeconds < 0 && currentIndex < parts.length - 1) {
+            currentIndex++;
+            currentSeconds = parts[currentIndex].minutes * 60;
+          }
+          updateLabels(currentSeconds);
+        }, 1000);
+      });
+
+      function formatTime(sec) {
+        const m = String(Math.floor(sec/60)).padStart(2,'0');
+        const s = String(sec%60).padStart(2,'0');
+        return `${m}:${s}`;
+      }
+
+      function updateLabels(currentSec = parts[0].minutes * 60) {
+        currentPartLabel.textContent = `Kvar på del: ${parts[currentIndex].title}`;
+        currentCountdown.textContent = formatTime(currentSec);
+        totalCountdown.textContent = formatTime(totalSeconds);
+        if (currentIndex < parts.length - 1) {
+          nextPartLabel.textContent = 'Nästa del:';
+          nextInfo.textContent = `${parts[currentIndex+1].title} (${parts[currentIndex+1].minutes} min)`;
+        } else {
+          nextPartLabel.textContent = '';
+          nextInfo.textContent = 'Ingen nästa del';
+        }
+      }
+
+      // Theme switching
+      document.querySelectorAll('#theme-nav a').forEach(link => {
+        link.addEventListener('click', e => {
+          e.preventDefault();
+          document.body.className = `theme-${link.dataset.theme}`;
+        });
+      });
+    });
+  </script>
+</body>
+</html>
